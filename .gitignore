@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+
+# secrets
+.env
+
+# private learning materials (not part of the runnable project)
+local/
+CLAUDE.md
