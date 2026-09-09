@@ -60,6 +60,42 @@ def run_shell(command):
     return output if output.strip() else f"(exit {result.returncode}, no output)"
 
 
+MAX_MATCHES = 50
+
+
+def search_code(pattern, path="."):
+    try:
+        result = subprocess.run(
+            ["rg", "--json", pattern, path],
+            capture_output=True, text=True, timeout=30,
+        )
+    except FileNotFoundError:
+        return "Error: ripgrep (rg) is not installed."
+    except subprocess.TimeoutExpired:
+        return "Error: search timed out after 30s."
+    if result.returncode > 1:
+        return f"Error: {result.stderr.strip()}"
+
+    lines = []
+    total = 0
+    for raw in result.stdout.splitlines():
+        event = json.loads(raw)
+        if event["type"] != "match":
+            continue
+        total += 1
+        if len(lines) < MAX_MATCHES:
+            d = event["data"]
+            text = d["lines"]["text"].rstrip("\n")
+            lines.append(f"{d['path']['text']}:{d['line_number']}: {text}")
+
+    if total == 0:
+        return f"No matches for '{pattern}'."
+    out = "\n".join(lines)
+    if total > MAX_MATCHES:
+        out += f"\n... and {total - MAX_MATCHES} more matches. Narrow your pattern."
+    return out
+
+
 TOOL_LIST = [
     {
         "fn": read_file,
@@ -101,6 +137,28 @@ TOOL_LIST = [
                         }
                     },
                     "required": [],
+                },
+            },
+        },
+    },
+    {
+        "fn": search_code,
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "search_code",
+                "description": (
+                    "Search the repository for a regular-expression pattern and return "
+                    "matching lines as 'path:line:text'. Respects .gitignore. Use this to "
+                    "locate code by symbol name, string, or pattern instead of guessing paths."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {"type": "string", "description": "Regex pattern to search for."},
+                        "path": {"type": "string", "description": "File or directory to search. Defaults to the whole repo."},
+                    },
+                    "required": ["pattern"],
                 },
             },
         },
